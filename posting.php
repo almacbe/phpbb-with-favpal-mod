@@ -161,6 +161,9 @@ switch( $mode )
 	case 'topicreview':
 		$is_auth_type = 'auth_read';
 		break;
+	case 'thank':
+		$is_auth_type = 'auth_read';
+		break;
 	default:
 		message_die(GENERAL_MESSAGE, $lang['No_post_mode']);
 		break;
@@ -184,7 +187,7 @@ switch ( $mode )
 			FROM " . FORUMS_TABLE . " 
 			WHERE forum_id = $forum_id";
 		break;
-
+	case 'thank':
 	case 'reply':
 	case 'vote':
 		if ( empty( $topic_id) )
@@ -236,7 +239,7 @@ if ( ($result = $db->sql_query($sql)) && ($post_info = $db->sql_fetchrow($result
 	{ 
 	   message_die(GENERAL_MESSAGE, $lang['Forum_locked']); 
 	} 
-	else if ( $mode != 'newtopic' && $post_info['topic_status'] == TOPIC_LOCKED && !$is_auth['auth_mod']) 
+	else if ( $mode != 'newtopic' &&  $mode != 'thank' && $post_info['topic_status'] == TOPIC_LOCKED && !$is_auth['auth_mod']) 
 	{ 
 	   message_die(GENERAL_MESSAGE, $lang['Topic_locked']); 
 	} 
@@ -350,6 +353,7 @@ if ( !$is_auth[$is_auth_type] )
 		case 'newtopic':
 			$redirect = "mode=newtopic&" . POST_FORUM_URL . "=" . $forum_id;
 			break;
+		case 'thank':	
 		case 'reply':
 		case 'topicreview':
 			$redirect = "mode=reply&" . POST_TOPIC_URL . "=" . $topic_id;
@@ -459,6 +463,214 @@ if ( ( $delete || $poll_delete || $mode == 'delete' ) && !$confirm )
 
 	include($phpbb_root_path . 'includes/page_tail.'.$phpEx);
 }
+else if ( $mode == 'thank' )
+{	//Begin FavPal Mod
+	$topic_id = intval($HTTP_GET_VARS[POST_TOPIC_URL]);
+	$post_id = intval($HTTP_GET_VARS[POST_POST_URL]);
+	$post_user_id = intval($HTTP_GET_VARS['u']);
+		if ( !($userdata['session_logged_in']) )
+		{
+			$message = $lang['thanks_not_logged'];
+			$message .=  '<br /><br />' . sprintf($lang['Click_return_topic'], '<a href="' . append_sid("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id") . '">', '</a>');
+			message_die(GENERAL_MESSAGE, $message);
+		}
+		if ( empty($topic_id) )
+		{
+			message_die(GENERAL_MESSAGE, 'No topic Selected');
+		}
+		if ( empty($post_id) )
+		{
+			message_die(GENERAL_MESSAGE, 'No post Selected');
+		}
+
+		$userid = $userdata['user_id'];
+		$thanks_date = time();
+
+		// Check if user is the topic starter
+		$sql = "SELECT `poster_id`
+				FROM " . POSTS_TABLE . " 
+				WHERE topic_id = $topic_id
+				AND post_id = " . $post_id .
+				" AND poster_id = $userid";
+		if ( !($result = $db->sql_query($sql)) )
+		{
+			message_die(GENERAL_ERROR, "Couldn't check for topic starter", '', __LINE__, __FILE__, $sql);
+					
+		}
+
+		if ( ($topic_starter_check = $db->sql_fetchrow($result)) )
+		{
+			$message = $lang['t_starter'];
+			$message .=  '<br /><br />' . sprintf($lang['Click_return_topic'], '<a href="' . append_sid("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id") . '">', '</a>');
+			message_die(GENERAL_MESSAGE, $message);
+		}
+
+		// Check if user had thanked before
+		$sql = "SELECT `topic_id`
+				FROM " . THANKS_TABLE . " 
+				WHERE topic_id = $topic_id
+				AND post_id = " . $post_id .
+				" AND user_id = $userid";
+		if ( !($result = $db->sql_query($sql)) )
+		{
+			message_die(GENERAL_ERROR, "Couldn't check for previous thanks", '', __LINE__, __FILE__, $sql);
+					
+		}
+		
+		if ( !($thankfull_check = $db->sql_fetchrow($result)) )
+		{
+			
+			//Comprobamos si tiene cuenta FAVPAL la persona a la que thankeamos
+			
+			 $sql = "SELECT `favpal_id`, `favpal_password`, `favpal_user` 
+					FROM " . USERS_TABLE . " 
+					WHERE user_id = $post_user_id";
+
+			if ( !($result = $db->sql_query($sql)) )
+			{
+				message_die(GENERAL_ERROR, "Problemas accediendo a FavPal", '', __LINE__, __FILE__, $sql);
+			}
+			
+			$favpal_transfer = false;	// control de transferencia
+			
+			if ( !($favpal_check = $db->sql_fetchrow($result)) )
+			{
+				message_die(GENERAL_ERROR, "Problemas accediendo a la informacion de FavPal del usuario", '', __LINE__, __FILE__, $sql);
+			}
+			
+			if ( empty($favpal_check['favpal_id']) )
+			{	//No tiene cuenta de FavPal, la creamos
+
+				//Crear la transferencia
+				$sql = "SELECT `favpal_id`, `favpal_password`
+						FROM " . USERS_TABLE . "
+						WHERE user_id = $userid";
+				if ( !($result = $db->sql_query($sql)) )
+				{
+					message_die(GENERAL_ERROR, "Problemas accediendo a la informacion de FavPal del usuario", '', __LINE__, __FILE__, $sql);
+				}
+
+				if ( !($favpal_info = $db->sql_fetchrow($result)) )
+				{
+					message_die(GENERAL_ERROR, "Problemas accediendo a la informacion de FavPal del usuario", '', __LINE__, __FILE__, $sql);
+				}
+
+				$login = "$favpal_info[favpal_id]:$favpal_info[favpal_password]";		//Usuario:contraseña de la persona que va a enviar el fav
+				
+				srand (time());
+				$password = "";
+				for ($k = 1; $k <= 10; $k++){
+					$password .= rand(0,9);
+				}
+				$xml = "<abitant><password>$password</password><password_confirmation>$password</password_confirmation></abitant>";
+				
+				$target = "http://favpal.org/abitants.xml";
+
+				$ch = curl_init();
+				curl_setopt($ch, CURLOPT_URL, $target);
+				curl_setopt($ch, CURLOPT_USERPWD, $login);
+				curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+				curl_setopt ($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+				curl_setopt($ch, CURLOPT_POSTFIELDS, $xml);
+				
+				$xml = curl_exec($ch);
+								
+				if( curl_getinfo($ch, CURLINFO_HTTP_CODE) == 201 )
+				{
+					$items = new SimpleXMLElement($xml);
+
+					$favpal_password = $items->{'crypted-password'};
+					$favpal_id = $items->id;
+					
+					$sql = "UPDATE " . USERS_TABLE . "
+							SET favpal_id = $favpal_id, favpal_password = '$favpal_password'
+							WHERE user_id = $post_user_id";
+
+					if ( !$db->sql_query($sql) )
+					{
+						message_die(GENERAL_ERROR, 'Could not update information user', '', __LINE__, __FILE__, $sql);
+					}
+					else{
+						$favpal_transfer = true;
+					}
+					
+				}
+				else{
+					$message .= $xml;
+				}
+			}
+			else{	//Tiene cuenta de FAVPAL...
+				
+				//Crear la transferencia
+				$sql = "SELECT `favpal_id`, `favpal_password`
+						FROM " . USERS_TABLE . "
+						WHERE user_id = $userid";
+				
+				if ( !($result = $db->sql_query($sql)) )
+				{
+					message_die(GENERAL_ERROR, "Problemas accediendo a la informacion de FavPal del usuario", '', __LINE__, __FILE__, $sql);
+				}
+
+				if ( !($favpal_info = $db->sql_fetchrow($result)) )
+				{
+					message_die(GENERAL_ERROR, "Problemas accediendo a la informacion de FavPal del usuario", '', __LINE__, __FILE__, $sql);
+				}
+				
+				$login = "$favpal_info[favpal_id]:$favpal_info[favpal_password]";		//Usuario:contraseña de la persona que va a enviar el fav
+
+				$xml = "";
+				if( empty($favpal_check['favpal_user']) ){
+					$xml .= "<transfer><receiver>$favpal_check[favpal_id]</receiver></transfer>";
+				}
+				else{
+					$xml .= "<transfer><receiver>$favpal_check[favpal_user]</receiver></transfer>";
+				}
+				
+				$target = "http://favpal.org/transfers.xml";
+				
+				$ch = curl_init();
+				curl_setopt($ch, CURLOPT_URL, $target);
+				curl_setopt($ch, CURLOPT_USERPWD, $login);
+				curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+				curl_setopt ($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+				curl_setopt($ch, CURLOPT_POSTFIELDS, $xml);				
+				
+				$xml = curl_exec($ch);
+				
+				if( curl_getinfo($ch, CURLINFO_HTTP_CODE) == 201 )
+				{
+					// Se ha hecho la transferencia
+					$favpal_transfer = true;
+				}
+				else{
+					$message .= $xml;
+				}
+			}
+			if($favpal_transfer === true){
+				// Insert thanks if he/she hasn't
+				$sql = "INSERT INTO " . THANKS_TABLE . " (topic_id, user_id, thanks_time, post_id) 
+				VALUES ('" . $topic_id . "', '" . $userid . "', " . $thanks_date . ", '" . $post_id . "') ";
+				if ( !($result = $db->sql_query($sql)) )
+				{
+					message_die(GENERAL_ERROR, "Could not insert thanks information", '', __LINE__, __FILE__, $sql);
+
+				}
+				$message = $lang['thanks_add'];
+			}
+		}
+		else
+		{
+			$message = $lang['thanked_before'];
+		}
+
+		$template->assign_vars(array(
+			'META' => '<meta http-equiv="refresh" content="3;url=' . append_sid("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id") . '">')
+		);
+
+		$message .=  '<br /><br />' . sprintf($lang['Click_return_topic'], '<a href="' . append_sid("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id") . '">', '</a>');
+		
+		message_die(GENERAL_MESSAGE, $message);	
+}	//End FavPal Mod
 else if ( $mode == 'vote' )
 {
 	//

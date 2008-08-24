@@ -1023,5 +1023,18 @@ $lang['Session_invalid'] = 'Invalid Session. Please resubmit the form.';
 //
 // That's all, Folks!
 // -------------------------------------------------
+// Begin FavPal Mod
+$lang['thankful'] = 'Thankful People';
+$lang['thanks_to'] = 'Thanks';
+$lang['thanks_end'] = 'for his/her post';
+$lang['thanks_alt'] = 'Thank Post';
+$lang['thanked_before'] = 'You have already thanked this topic';
+$lang['thanks_add'] = 'Your thanks has been given';
+$lang['thanks_not_logged'] = 'You need to log in to thank someone\'s post';
+$lang['thanked'] = 'user(s) is/are thankful for this post.';
+$lang['hide'] = 'Hide';
+$lang['t_starter'] = 'You cannot thank yourself';
+$lang['thank_no_exist'] = 'Forum thank information doesn\'t exists';
+// End FavPal Mod
 
 ?>

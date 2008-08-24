@@ -553,6 +553,32 @@ function create_date($format, $gmepoch, $tz)
 // Pagination routine, generates
 // page number sequence
 //
+function get_page($num_items, $per_page, $start_item)
+{
+
+	$total_pages = ceil($num_items/$per_page);
+
+	if ( $total_pages == 1 )
+	{
+		return '1';
+		exit;
+	}
+
+	$on_page = floor($start_item / $per_page) + 1;
+	$page_string = '';
+
+	for($i = 0; $i < $total_pages + 1; $i++)
+	{
+		if( $i == $on_page ) 
+		{
+			$page_string = $i;
+		}
+		
+	}
+	return $page_string;
+}
+
+
 function generate_pagination($base_url, $num_items, $per_page, $start_item, $add_prevnext_text = TRUE)
 {
 	global $lang;

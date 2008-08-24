@@ -132,6 +132,48 @@
 	  <td class="catSides" colspan="2" height="28">&nbsp;</td>
 	</tr>
 	<tr> 
+	  <th class="thSides" colspan="2" height="25" valign="middle">{L_FAVPAL_INFO}</th>
+	</tr>
+	<!-- BEGIN favpal_no_edit_profile -->
+	<tr> 
+	  <td class="row2" colspan="2"><span class="gensmall">{L_FAVPAL_INFO_NOTICE}</span></td>
+	</tr>
+	<tr> 
+	  <td class="row1"><span class="gen">{L_FAVPAL_USER}:</span></td>
+	  <td class="row2"> 
+		<input type="hidden" name="favpal_user" value="{FAVPAL_USER}" /><span class="gen"><b>{FAVPAL_USER}</b></span>
+	  </td>
+	</tr>
+	<tr>
+	  <td class="row1"><span class="gen">{L_FAVPAL_PASS}:</span></td>
+	  <td class="row2">
+		<input type="password" class="post" style="width: 200px" name="favpal_password" size="25" maxlength="32" value="{FAVPAL_PASSWORD}" />
+	  </td>
+	  <input type="hidden" class="post" name="favpal_oper" value="{FAVPAL_OPER}">
+	</tr>
+	<!-- END favpal_no_edit_profile -->
+	<!-- BEGIN favpal_edit_profile -->
+	<tr> 
+	  <td class="row2" colspan="2"><span class="gensmall">{L_FAVPAL_INFO_NOTICE}</span></td>
+	</tr>
+	<tr> 
+	  <td class="row1"><span class="gen">{L_FAVPAL_USER}:</span></td>
+	  <td class="row2">
+		<input type="text" class="post" style="width:200px" name="favpal_user" size="25" maxlength="25" value="{FAVPAL_USER}" />
+	  </td>
+	</tr>
+	<tr>
+	  <td class="row1"><span class="gen">{L_FAVPAL_PASS}:</span></td>
+	  <td class="row2">
+		<input type="password" class="post" style="width: 200px" name="favpal_password" size="25" maxlength="32" value="{FAVPAL_PASSWORD}" />
+	  </td>
+	  <input type="hidden" class="post" name="favpal_oper" value="{FAVPAL_OPER}">
+	</tr>
+	<!-- END favpal_edit_profile -->
+	<tr> 
+	  <td class="catSides" colspan="2" height="28">&nbsp;</td>
+	</tr>
+	<tr> 
 	  <th class="thSides" colspan="2" height="25" valign="middle">{L_PREFERENCES}</th>
 	</tr>
 	<tr> 

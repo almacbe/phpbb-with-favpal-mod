@@ -506,6 +506,9 @@ if (isset($HTTP_GET_VARS['highlight']))
 //
 $new_topic_url = append_sid("posting.$phpEx?mode=newtopic&amp;" . POST_FORUM_URL . "=$forum_id");
 $reply_topic_url = append_sid("posting.$phpEx?mode=reply&amp;" . POST_TOPIC_URL . "=$topic_id");
+// Begin FavPal Mod
+$thank_topic_url = append_sid("posting.$phpEx?mode=thank&amp;" . POST_TOPIC_URL . "=$topic_id");
+// End FavPal Mod
 $view_forum_url = append_sid("viewforum.$phpEx?" . POST_FORUM_URL . "=$forum_id");
 $view_prev_topic_url = append_sid("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id&amp;view=previous");
 $view_next_topic_url = append_sid("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id&amp;view=next");
@@ -530,6 +533,11 @@ $reply_img = ( $forum_topic_data['forum_status'] == FORUM_LOCKED || $forum_topic
 $reply_alt = ( $forum_topic_data['forum_status'] == FORUM_LOCKED || $forum_topic_data['topic_status'] == TOPIC_LOCKED ) ? $lang['Topic_locked'] : $lang['Reply_to_topic'];
 $post_img = ( $forum_topic_data['forum_status'] == FORUM_LOCKED ) ? $images['post_locked'] : $images['post_new'];
 $post_alt = ( $forum_topic_data['forum_status'] == FORUM_LOCKED ) ? $lang['Forum_locked'] : $lang['Post_new_topic'];
+// Begin FavPal Mod
+$thank_img = $images['thanks'];
+$favpal_img = '';
+$thank_alt = $lang['thanks_alt'];
+// End FavPal Mod
 
 //
 // Set a cookie for this topic
@@ -624,6 +632,9 @@ if ( $can_watch_topic )
 // I get annoyed when I lose my highlight after the first page.
 //
 $pagination = ( $highlight != '' ) ? generate_pagination("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id&amp;postdays=$post_days&amp;postorder=$post_order&amp;highlight=$highlight", $total_replies, $board_config['posts_per_page'], $start) : generate_pagination("viewtopic.$phpEx?" . POST_TOPIC_URL . "=$topic_id&amp;postdays=$post_days&amp;postorder=$post_order", $total_replies, $board_config['posts_per_page'], $start);
+// Begin FavPal Mod
+$current_page = get_page($total_replies, $board_config['posts_per_page'], $start);
+// End FavPal Mod
 
 //
 // Send vars to template
@@ -823,6 +834,25 @@ if ( !$db->sql_query($sql) )
 {
 	message_die(GENERAL_ERROR, "Could not update topic views.", '', __LINE__, __FILE__, $sql);
 }
+
+//Begin FavPal Mod
+$sql = "SELECT favpal_id
+		FROM " . USERS_TABLE . "
+		WHERE user_id = $userdata[user_id]";
+
+if ( !($result = $db->sql_query($sql)) )
+{
+	message_die(GENERAL_ERROR, "Could not obtain user information", '', __LINE__, __FILE__, $sql);
+}
+$favpal_id = $db->sql_fetchrowset($result);
+
+$favpal_info = false;
+if( $favpal_id[0]['favpal_id'] )
+{
+	$favpal_info = true;
+}
+
+//End FavPal Mod
 
 //
 // Okay, let's do the loop, yeah come on baby let's do the loop
@@ -1147,6 +1177,72 @@ for($i = 0; $i < $total_posts; $i++)
 	{
 		$l_edited_by = '';
 	}
+	// Begin FavPal Mod
+	if( $favpal_info )
+	{
+		// Select Format for the date
+		$timeformat = "d-m, G:i";
+
+		$sql = "SELECT u.user_id, u.username, t.thanks_time
+			 FROM " . THANKS_TABLE . " t, " . USERS_TABLE . " u
+			 WHERE topic_id = $topic_id
+			 AND post_id = " . $postrow[$i]['post_id'] .
+			 " AND t.user_id = u.user_id";
+
+		if ( !($result = $db->sql_query($sql)) )
+		{
+			message_die(GENERAL_ERROR, "Could not obtain thanks information", '', __LINE__, __FILE__, $sql);
+		}
+
+		$total_thank = $db->sql_numrows($result);
+		if( $total_thank > 0 ){
+			$thanks = "";		
+			$thanksrow = array();
+			$thanksrow = $db->sql_fetchrowset($result);
+
+			for($k = 0; $k < $total_thank; $k++)
+			{
+				$topic_thanks = $db->sql_fetchrow($result);
+				$thanker_id[$k] = $thanksrow[$k]['user_id'];
+				$thanker_name[$k] = $thanksrow[$k]['username'];
+				$thanks_date[$k] = $thanksrow[$k]['thanks_time'];
+
+				// Get thanks date
+				$thanks_date[$k] = create_date($timeformat, $thanks_date[$k], $board_config['board_timezone']);
+
+				// Make thanker profile link
+				$thanker_profile[$k] = append_sid("profile.$phpEx?mode=viewprofile&amp;" . POST_USERS_URL . "=$thanker_id[$k]");   
+				$thanks .= '<a href="' .$thanker_profile[$k] . '">' . $thanker_name[$k] . '</a>(' . $thanks_date[$k] . '), ';
+
+				if ($userdata['user_id'] == $thanksrow[$k]['user_id'])
+				{
+					$thanked = TRUE;
+				}
+			}
+
+			$sql = "SELECT u.topic_poster, t.user_id, t.username
+					FROM " . TOPICS_TABLE . " u, " . USERS_TABLE . " t
+					WHERE topic_id = $topic_id
+					AND u.topic_poster = t.user_id";
+
+			if ( !($result = $db->sql_query($sql)) )
+			{
+				message_die(GENERAL_ERROR, "Could not obtain user information", '', __LINE__, __FILE__, $sql);
+			}
+
+			if( !($autor = $db->sql_fetchrowset($result)) )
+			{
+				message_die(GENERAL_ERROR, "Could not obtain user information", '', __LINE__, __FILE__, $sql);
+			}	
+
+			$autor_name = $autor[0]['username'];
+			$thanks .= "".$lang['thanks_to']." $autor_name ".$lang['thanks_end']."";
+		}
+
+		$favpal_img = '<a href="' . $thank_topic_url . "&amp;p=" . $postrow[$i]['post_id'] . "&amp;u=" . $postrow[$i]['user_id'] . '"><img src="' .  $thank_img . '" alt="' . $thank_alt . '" title="' . "Thanks" . '" border="0" /></a>';
+	
+	}
+	//End FavPal Mod
 
 	//
 	// Again this will be handled by the templating
@@ -1173,6 +1269,10 @@ for($i = 0; $i < $total_posts; $i++)
 
 		'MINI_POST_IMG' => $mini_post_img,
 		'PROFILE_IMG' => $profile_img,
+		
+		//FavPal
+		'FAVPAL_IMG' => $favpal_img,
+		
 		'PROFILE' => $profile,
 		'SEARCH_IMG' => $search_img,
 		'SEARCH' => $search,
@@ -1205,6 +1305,20 @@ for($i = 0; $i < $total_posts; $i++)
 		'U_MINI_POST' => $mini_post_url,
 		'U_POST_ID' => $postrow[$i]['post_id'])
 	);
+	// Begin FavPal Mod
+	if( $favpal_info && ($total_thank > 0) )
+	{
+		$template->assign_block_vars('postrow.thanks', array(
+		'THANKFUL' => $lang['thankful'],
+		'THANKED' => $lang['thanked'],
+		'HIDE' => $lang['hide'],
+		'THANKS_TOTAL' => $total_thank,
+		'THANKS' => $thanks
+		)
+		);
+
+	}
+	// End FavPal Mod
 }
 
 $template->pparse('body');

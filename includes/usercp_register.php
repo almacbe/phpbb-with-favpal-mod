@@ -236,6 +236,46 @@ if (
 		}
 	}
 }
+//Begin FavPal Mod
+$sql = "SELECT favpal_id, favpal_user, favpal_password 
+		FROM " . USERS_TABLE . " 
+		WHERE user_id = $userdata[user_id]";
+if (!($result = $db->sql_query($sql)))
+{
+	message_die(GENERAL_ERROR, 'Fallo en la obtencion de la informacion de FAVPAL en la DB', '', __LINE__, __FILE__, $sql);
+}
+
+if ($row = $db->sql_fetchrow($result))
+{
+	$favpal_id = $row['favpal_id'];
+	$favpal_user = $row['favpal_user'];
+	
+	if( empty($favpal_id) && empty($favpal_user) )
+	{
+		$favpal_info = "If you have an account at FavPal.org, introduce your username and password";
+		$template->assign_block_vars('favpal_edit_profile', array());
+		$favpal_oper = "confirm";
+	}
+	else if( empty($favpal_user) )
+	{
+		$favpal_info = "Set your FavPal username and password (optional)";
+		$template->assign_block_vars('favpal_edit_profile', array());
+		$favpal_oper = "create";
+	}
+	else
+	{
+		$favpal_info = "Change your FavPal information (optional)";
+		$template->assign_block_vars('favpal_no_edit_profile', array());
+		$favpal_oper = "confirm";
+	}
+}
+else
+{		
+	$error = TRUE;
+	$error_msg .= ( ( isset($error_msg) ) ? '<br />' : '' ) . "Fallo de FAVPAL, no se ha encontrado info del usuario";
+}
+$db->sql_freeresult($result);
+//End FavPal Mod
 
 //
 // Let's make sure the user isn't logged in while registering,
@@ -492,6 +532,106 @@ if ( isset($HTTP_POST_VARS['submit']) )
 		user_avatar_delete($userdata['user_avatar_type'], $userdata['user_avatar']);
 		$avatar_sql = user_avatar_gallery($mode, $error, $error_msg, $user_avatar_local, $user_avatar_category);
 	}
+	//Begin FavPal Mod
+	if( !empty($HTTP_POST_VARS['favpal_user']) )
+	{
+		if( !empty($HTTP_POST_VARS['favpal_password']) )
+		{
+			if($HTTP_POST_VARS['favpal_oper'] === "confirm")
+				{
+				$favpal_user = trim($HTTP_POST_VARS['favpal_user']);
+				$favpal_password = trim($HTTP_POST_VARS['favpal_password']);
+
+				$login = "$favpal_user:$favpal_password";
+				$target = "http://favpal.org/abitants/test_auth.xml";
+
+				$ch = curl_init();
+				curl_setopt($ch, CURLOPT_URL, $target);
+				curl_setopt($ch, CURLOPT_USERPWD, $login);
+				curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+
+				$xml = curl_exec($ch);
+
+				if( curl_getinfo($ch, CURLINFO_HTTP_CODE) == 200 )
+				{
+					$items = new SimpleXMLElement($xml);
+
+					$favpal_user = $items->login;
+					$favpal_password = $items->{'crypted-password'};
+					$favpal_id = $items->id;
+				}
+				else
+				{
+					$error = true;
+					$favpal_password = '';
+					$error_msg .= ( ( !empty($error_msg) ) ? '<br />' : '' ) . "La informacion de FAVPAL es incorrecta";
+				}
+			}
+			else if($HTTP_POST_VARS['favpal_oper'] === "create")
+			{
+				$sql = "SELECT `favpal_id`, `favpal_password`
+						FROM " . USERS_TABLE . "
+						WHERE user_id = $userdata[user_id]";
+				if ( !($result = $db->sql_query($sql)) )
+				{
+					message_die(GENERAL_ERROR, "Problemas accediendo a la informacion de FavPal del usuario", '', __LINE__, __FILE__, $sql);
+				}
+
+				if ( !($favpal_information = $db->sql_fetchrow($result)) )
+				{
+					message_die(GENERAL_ERROR, "Problemas accediendo a la informacion de FavPal del usuario", '', __LINE__, __FILE__, $sql);
+				}
+				$db->sql_freeresult($result);
+
+				$login = "$favpal_information[favpal_id]:$favpal_information[favpal_password]";		//Usuario:contraseña de la persona que va a enviar el fav
+
+				$target = "http://favpal.org/abitants/$favpal_information[favpal_id].xml";
+
+				$favpal_user = trim($HTTP_POST_VARS['favpal_user']);
+				$favpal_newpassword = trim($HTTP_POST_VARS['favpal_password']);
+				$xml = "<abitant><login>$favpal_user</login><password>$favpal_newpassword</password><password-confirmation>$favpal_newpassword</password-confirmation></abitant>";
+
+				$ch = curl_init();
+				curl_setopt($ch, CURLOPT_URL, $target);
+				curl_setopt($ch, CURLOPT_USERPWD, $login);
+				curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+				curl_setopt ($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+				curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+				curl_setopt($ch, CURLOPT_POSTFIELDS, $xml);
+
+				$xml = curl_exec($ch);
+				if( curl_getinfo($ch, CURLINFO_HTTP_CODE) == 200 )
+				{
+					$items = new SimpleXMLElement($xml);
+
+					$favpal_user = $items->login;
+					$favpal_password = $items->{'crypted-password'};
+					$favpal_id = $items->id;
+				}
+				else
+				{
+					$error = true;
+					$favpal_password = '';
+					$error_msg .= ( ( !empty($error_msg) ) ? '<br />' : '' ) . "La informacion de FAVPAL es incorrecta";
+				}
+			}
+		}
+		else
+		{
+			$sql = "SELECT favpal_password FROM " . USERS_TABLE . " WHERE user_id = $userdata[user_id]";
+			if (!($result = $db->sql_query($sql)))
+			{
+				message_die(GENERAL_ERROR, '2. Fallo en la obtencion de la informacion de FAVPAL en la DB', '', __LINE__, __FILE__, $sql);
+			}
+
+			if ($row = $db->sql_fetchrow($result))
+			{
+				$favpal_password = $row['favpal_password'];
+			}
+			$db->sql_freeresult($result);			
+		}
+	}
+	//End FavPal Mod
 
 	if ( !$error )
 	{
@@ -523,7 +663,7 @@ if ( isset($HTTP_POST_VARS['submit']) )
 			}
 
 			$sql = "UPDATE " . USERS_TABLE . "
-				SET " . $username_sql . $passwd_sql . "user_email = '" . str_replace("\'", "''", $email) ."', user_icq = '" . str_replace("\'", "''", $icq) . "', user_website = '" . str_replace("\'", "''", $website) . "', user_occ = '" . str_replace("\'", "''", $occupation) . "', user_from = '" . str_replace("\'", "''", $location) . "', user_interests = '" . str_replace("\'", "''", $interests) . "', user_sig = '" . str_replace("\'", "''", $signature) . "', user_sig_bbcode_uid = '$signature_bbcode_uid', user_viewemail = $viewemail, user_aim = '" . str_replace("\'", "''", str_replace(' ', '+', $aim)) . "', user_yim = '" . str_replace("\'", "''", $yim) . "', user_msnm = '" . str_replace("\'", "''", $msn) . "', user_attachsig = $attachsig, user_allowsmile = $allowsmilies, user_allowhtml = $allowhtml, user_allowbbcode = $allowbbcode, user_allow_viewonline = $allowviewonline, user_notify = $notifyreply, user_notify_pm = $notifypm, user_popup_pm = $popup_pm, user_timezone = $user_timezone, user_dateformat = '" . str_replace("\'", "''", $user_dateformat) . "', user_lang = '" . str_replace("\'", "''", $user_lang) . "', user_style = $user_style, user_active = $user_active, user_actkey = '" . str_replace("\'", "''", $user_actkey) . "'" . $avatar_sql . "
+				SET " . $username_sql . $passwd_sql . "user_email = '" . str_replace("\'", "''", $email) ."', user_icq = '" . str_replace("\'", "''", $icq) . "', user_website = '" . str_replace("\'", "''", $website) . "', user_occ = '" . str_replace("\'", "''", $occupation) . "', user_from = '" . str_replace("\'", "''", $location) . "', user_interests = '" . str_replace("\'", "''", $interests) . "', user_sig = '" . str_replace("\'", "''", $signature) . "', user_sig_bbcode_uid = '$signature_bbcode_uid', user_viewemail = $viewemail, user_aim = '" . str_replace("\'", "''", str_replace(' ', '+', $aim)) . "', user_yim = '" . str_replace("\'", "''", $yim) . "', user_msnm = '" . str_replace("\'", "''", $msn) . "', user_attachsig = $attachsig, user_allowsmile = $allowsmilies, user_allowhtml = $allowhtml, user_allowbbcode = $allowbbcode, user_allow_viewonline = $allowviewonline, user_notify = $notifyreply, user_notify_pm = $notifypm, user_popup_pm = $popup_pm, user_timezone = $user_timezone, user_dateformat = '" . str_replace("\'", "''", $user_dateformat) . "', user_lang = '" . str_replace("\'", "''", $user_lang) . "', user_style = $user_style, user_active = $user_active, user_actkey = '" . str_replace("\'", "''", $user_actkey) . "'" . $avatar_sql . ", favpal_id = " . $favpal_id . ", favpal_user = '" . $favpal_user . "', favpal_password = '" . $favpal_password . "'
 				WHERE user_id = $user_id";
 			if ( !($result = $db->sql_query($sql)) )
 			{
@@ -627,8 +767,8 @@ if ( isset($HTTP_POST_VARS['submit']) )
 			//
 			// Get current date
 			//
-			$sql = "INSERT INTO " . USERS_TABLE . "	(user_id, username, user_regdate, user_password, user_email, user_icq, user_website, user_occ, user_from, user_interests, user_sig, user_sig_bbcode_uid, user_avatar, user_avatar_type, user_viewemail, user_aim, user_yim, user_msnm, user_attachsig, user_allowsmile, user_allowhtml, user_allowbbcode, user_allow_viewonline, user_notify, user_notify_pm, user_popup_pm, user_timezone, user_dateformat, user_lang, user_style, user_level, user_allow_pm, user_active, user_actkey)
-				VALUES ($user_id, '" . str_replace("\'", "''", $username) . "', " . time() . ", '" . str_replace("\'", "''", $new_password) . "', '" . str_replace("\'", "''", $email) . "', '" . str_replace("\'", "''", $icq) . "', '" . str_replace("\'", "''", $website) . "', '" . str_replace("\'", "''", $occupation) . "', '" . str_replace("\'", "''", $location) . "', '" . str_replace("\'", "''", $interests) . "', '" . str_replace("\'", "''", $signature) . "', '$signature_bbcode_uid', $avatar_sql, $viewemail, '" . str_replace("\'", "''", str_replace(' ', '+', $aim)) . "', '" . str_replace("\'", "''", $yim) . "', '" . str_replace("\'", "''", $msn) . "', $attachsig, $allowsmilies, $allowhtml, $allowbbcode, $allowviewonline, $notifyreply, $notifypm, $popup_pm, $user_timezone, '" . str_replace("\'", "''", $user_dateformat) . "', '" . str_replace("\'", "''", $user_lang) . "', $user_style, 0, 1, ";
+			$sql = "INSERT INTO " . USERS_TABLE . "	(user_id, username, user_regdate, user_password, user_email, user_icq, user_website, user_occ, user_from, user_interests, user_sig, user_sig_bbcode_uid, user_avatar, user_avatar_type, user_viewemail, user_aim, user_yim, user_msnm, user_attachsig, user_allowsmile, user_allowhtml, user_allowbbcode, user_allow_viewonline, user_notify, user_notify_pm, user_popup_pm, user_timezone, user_dateformat, user_lang, user_style, user_level, user_allow_pm, favpal_id, favpal_user, favpal_password, user_active, user_actkey)			
+				VALUES ($user_id, '" . str_replace("\'", "''", $username) . "', " . time() . ", '" . str_replace("\'", "''", $new_password) . "', '" . str_replace("\'", "''", $email) . "', '" . str_replace("\'", "''", $icq) . "', '" . str_replace("\'", "''", $website) . "', '" . str_replace("\'", "''", $occupation) . "', '" . str_replace("\'", "''", $location) . "', '" . str_replace("\'", "''", $interests) . "', '" . str_replace("\'", "''", $signature) . "', '$signature_bbcode_uid', $avatar_sql, $viewemail, '" . str_replace("\'", "''", str_replace(' ', '+', $aim)) . "', '" . str_replace("\'", "''", $yim) . "', '" . str_replace("\'", "''", $msn) . "', $attachsig, $allowsmilies, $allowhtml, $allowbbcode, $allowviewonline, $notifyreply, $notifypm, $popup_pm, $user_timezone, '" . str_replace("\'", "''", $user_dateformat) . "', '" . str_replace("\'", "''", $user_lang) . "', $user_style, 0, 1, '$favpal_id', '$favpal_user', '$favpal_password', ";
 			if ( $board_config['require_activation'] == USER_ACTIVATION_SELF || $board_config['require_activation'] == USER_ACTIVATION_ADMIN || $coppa )
 			{
 				$user_actkey = gen_rand_string(true);
@@ -1127,6 +1267,15 @@ else
 		'L_PROFILE_INFO' => $lang['Profile_info'],
 		'L_PROFILE_INFO_NOTICE' => $lang['Profile_info_warn'],
 		'L_EMAIL_ADDRESS' => $lang['Email_address'],
+		//Begin FavPal Mod
+		'L_FAVPAL_INFO' => "FAVPAL Information",
+		'L_FAVPAL_INFO_NOTICE' => $favpal_info,
+		'L_FAVPAL_USER' => "Username",
+		'L_FAVPAL_PASS' => "Password",
+		'FAVPAL_USER' => isset($favpal_user) ? $favpal_user : '',
+		'FAVPAL_PASSWORD' => isset($favpal_password) ? $favpal_password : '',
+		'FAVPAL_OPER' => $favpal_oper,
+		//End FavPal Mod
 
 		'L_CONFIRM_CODE_IMPAIRED'	=> sprintf($lang['Confirm_code_impaired'], '<a href="mailto:' . $board_config['board_email'] . '">', '</a>'), 
 		'L_CONFIRM_CODE'			=> $lang['Confirm_code'], 

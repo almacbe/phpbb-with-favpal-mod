@@ -329,6 +329,13 @@ switch( $mode )
 			//
 			// Got all required info so go ahead and start deleting everything
 			//
+			$sql = "DELETE FROM " . FAVPAL_TABLE . "
+					WHERE topic_id IN ($topic_id_sql)";
+			if ( !$db->sql_query($sql, BEGIN_TRANSACTION) )
+			{
+							message_die(GENERAL_ERROR, 'Error in deleting Thanks post Information', '', __LINE__, __FILE__, $sql);
+			}
+			
 			$sql = "DELETE 
 				FROM " . TOPICS_TABLE . " 
 				WHERE topic_id IN ($topic_id_sql) 
